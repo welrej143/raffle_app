@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "143060704309",
+    "project_id": "bet-wheel-app",
+    "storage_bucket": "bet-wheel-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:143060704309:android:7ee83de5af676d5f4fe57c",
+        "android_client_info": {
+          "package_name": "com.example.raffle_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBg1TujeAVrjdGnhhfBnTlbsWHxfkumQzA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
