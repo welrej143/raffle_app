@@ -186,481 +186,545 @@ class _PlayingScreenState extends State<PlayingScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       backgroundColor: Colors.black,
-      body: BlocProvider(
-        create: (_) => sl<RaffleCubit>()..fetchRaffle(widget.raffleId),
-        child: BlocConsumer<RaffleCubit, RaffleState>(
-          listener: (context, state) {
-            state.maybeWhen(
-              loaded: (raffle) {
-                if (raffle.availableSlots == 0 && !_hasSpun && !_isCountdownActive) {
-                  _startCountdownAndSpin(raffle.totalSlots);
-                }
-                if (raffle.availableSlots == 0 && widget.raffleId == 'mega_jackpot') {
-                  setState(() {
-                    isStartTambiolo = true; // Set the tambiolo flag to true
-                  });
-                }
-              },
-              orElse: () {},
-            );
-          },
-          builder: (context, state) {
-            return state.when(
-              initial: () => const Center(
-                  child: Text(
-                "Initializing...",
-                style: TextStyle(color: Colors.white),
-              )),
-              loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
-              loaded: (raffle) {
-                return Column(
+      body: Column(
+        children: [
+          // Coins Display Below AppBar
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser?.uid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 60,
+                  child: Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                return const SizedBox(
+                  height: 60,
+                  child: Center(
+                    child: Text(
+                      'Error loading coins',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                );
+              }
+
+              final userData = snapshot.data!.data() as Map<String, dynamic>;
+              final raffleCoins = userData['raffleCoins'] ?? 0;
+
+              return Container(
+                width: double.infinity,
+                color: Colors.black54, // Slight background contrast
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                        "Available Slots: ${raffle.availableSlots} / ${raffle.totalSlots}",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                    const Icon(
+                      Icons.monetization_on,
+                      color: Colors.yellow,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$raffleCoins Coins',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
+                  ],
+                ),
+              );
+            },
+          ),
 
-                    // Display slots bought by the user
-                    FutureBuilder<QuerySnapshot>(
-                      future: FirebaseFirestore.instance
-                          .collection('raffles')
-                          .where('raffleId', isEqualTo: widget.raffleId) // Filter by raffleId
-                          .get(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const CircularProgressIndicator(color: Colors.white);
-                        }
-
-                        if (snapshot.hasError) {
-                          return const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text(
-                              "Error fetching your slots.",
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 16,
-                              ),
-                            ),
-                          );
-                        }
-
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text(
-                              "No raffle found.",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orangeAccent,
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Extract the raffle document
-                        final raffleDoc = snapshot.data!.docs.first;
-                        final participants = List<Map<String, dynamic>>.from(raffleDoc['participants'] ?? []);
-
-                        // Find the user's slots
-                        final userId = FirebaseAuth.instance.currentUser?.uid;
-                        final userSlots = participants
-                            .where((participant) => participant['userId'] == userId)
-                            .map((participant) => participant['slot'])
-                            .toList()
-                            .cast<int>();
-
-                        if (userSlots.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text(
-                              "You have not purchased any slots yet.",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orangeAccent,
-                              ),
-                            ),
-                          );
-                        }
-
-                        return Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            "Your Slots: ${userSlots.join(', ')}",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.greenAccent,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    // Spinning Wheel or Countdown Animation
-                    if (_isCountdownActive)
-                      Center(
+          Expanded(
+            child: BlocProvider(
+              create: (_) => sl<RaffleCubit>()..fetchRaffle(widget.raffleId),
+              child: BlocConsumer<RaffleCubit, RaffleState>(
+                listener: (context, state) {
+                  state.maybeWhen(
+                    loaded: (raffle) {
+                      if (raffle.availableSlots == 0 && !_hasSpun && !_isCountdownActive) {
+                        _startCountdownAndSpin(raffle.totalSlots);
+                      }
+                      if (raffle.availableSlots == 0 && widget.raffleId == 'mega_jackpot') {
+                        setState(() {
+                          isStartTambiolo = true; // Set the tambiolo flag to true
+                        });
+                      }
+                    },
+                    orElse: () {},
+                  );
+                },
+                builder: (context, state) {
+                  return state.when(
+                    initial: () => const Center(
                         child: Text(
-                          'Starting in $_countdownValue',
-                          style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
+                      "Initializing...",
+                      style: TextStyle(color: Colors.white),
+                    )),
+                    loading: () => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                    loaded: (raffle) {
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text(
+                              "Available Slots: ${raffle.availableSlots} / ${raffle.totalSlots}",
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                    else if (widget.raffleId == 'mega_jackpot')
-                      Expanded(
-                        child: Center(
-                          child: AnimatedTambiolo(
-                            isStartTambiolo: isStartTambiolo,
-                            totalSlots: raffle.totalSlots,
-                            winnerCallback: (winner) {
-                              _showCelebrationDialog("Slot $winner");
-                            },
-                            raffleId: widget.raffleId,
-                          ),
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width * 0.9, // 90% of screen width
-                        height: MediaQuery.of(context).size.width * 0.9, // 90% of screen width (square)
-                        child: FortuneWheel(
-                          selected: _selectedStreamController.stream,
-                          animateFirst: false,
-                          duration: const Duration(seconds: 15),
-                          items: List.generate(
-                            raffle.totalSlots,
-                            (index) {
-                              final double angle = (2 * pi) / raffle.totalSlots; // Angle per slice
-                              return FortuneItem(
-                                child: Transform.rotate(
-                                  angle: -angle * index, // Rotate text upright
+            
+                          // Display slots bought by the user
+                          FutureBuilder<QuerySnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('raffles')
+                                .where('raffleId', isEqualTo: widget.raffleId) // Filter by raffleId
+                                .get(),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const CircularProgressIndicator(color: Colors.white);
+                              }
+            
+                              if (snapshot.hasError) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(8.0),
                                   child: Text(
-                                    '${index + 1}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
+                                    "Error fetching your slots.",
+                                    style: TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 16,
                                     ),
                                   ),
-                                ),
-                                style: FortuneItemStyle(
-                                  borderColor: Colors.white,
-                                  borderWidth: 1,
-                                  color: index % 2 == 0 ? Colors.blue[300]! : Colors.orange[300]!,
+                                );
+                              }
+            
+                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Text(
+                                    "No raffle found.",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orangeAccent,
+                                    ),
+                                  ),
+                                );
+                              }
+            
+                              // Extract the raffle document
+                              final raffleDoc = snapshot.data!.docs.first;
+                              final participants = List<Map<String, dynamic>>.from(raffleDoc['participants'] ?? []);
+            
+                              // Find the user's slots
+                              final userId = FirebaseAuth.instance.currentUser?.uid;
+                              final userSlots = participants
+                                  .where((participant) => participant['userId'] == userId)
+                                  .map((participant) => participant['slot'])
+                                  .toList()
+                                  .cast<int>();
+            
+                              if (userSlots.isEmpty) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Text(
+                                    "You have not purchased any slots yet.",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.orangeAccent,
+                                    ),
+                                  ),
+                                );
+                              }
+            
+                              return Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  "Your Slots: ${userSlots.join(', ')}",
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.greenAccent,
+                                  ),
                                 ),
                               );
                             },
                           ),
-                          onAnimationEnd: () async {
-                            if (_winnerIndex != null) {
-                              final winnerSlot = 'Slot ${_winnerIndex! + 1}'; // Winner slot number
-
-                              try {
-                                // Fetch raffle document
-                                final raffleQuerySnapshot = await FirebaseFirestore.instance
-                                    .collection('raffles')
-                                    .where('raffleId', isEqualTo: widget.raffleId)
-                                    .get();
-
-                                if (raffleQuerySnapshot.docs.isNotEmpty) {
-                                  final raffleDoc = raffleQuerySnapshot.docs.first;
-                                  final participants = List<Map<String, dynamic>>.from(
-                                    raffleDoc['participants'] ?? [],
-                                  );
-
-                                  // Find winner
-                                  final Map<String, dynamic> winner = participants.firstWhere(
-                                    (participant) => participant['slot'] == _winnerIndex! + 1,
-                                    orElse: () => {},
-                                  );
-
-                                  if (winner.isNotEmpty) {
-                                    final winnerId = winner['userId'];
-
-                                    // Fetch user data
-                                    final userDoc =
-                                        await FirebaseFirestore.instance.collection('users').doc(winnerId).get();
-
-                                    if (userDoc.exists) {
-                                      final prizeAmount = raffleDoc['winningAmount'] ?? 0;
-
-                                      // Update user coins
-                                      await FirebaseFirestore.instance.collection('users').doc(winnerId).update({
-                                        'raffleCoins': FieldValue.increment(prizeAmount),
-                                      });
-
-                                      // Save to raffle_history
-                                      await FirebaseFirestore.instance.collection('raffle_history').add({
-                                        'slotNumber': _winnerIndex! + 1, // Save the winning slot number
-                                        'winnerId': winnerId, // Winner's user ID
-                                        'prizeAmount': prizeAmount, // Prize amount
-                                        'timestamp': FieldValue.serverTimestamp(), // Timestamp of the event
-                                      });
-
-                                      // Show winner dialog
-                                      showDialog(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (context) => AlertDialog(
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(20),
+            
+                          // Spinning Wheel or Countdown Animation
+                          if (_isCountdownActive)
+                            Center(
+                              child: Text(
+                                'Starting in $_countdownValue',
+                                style: const TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            )
+                          else if (widget.raffleId == 'mega_jackpot')
+                            Expanded(
+                              child: Center(
+                                child: AnimatedTambiolo(
+                                  isStartTambiolo: isStartTambiolo,
+                                  totalSlots: raffle.totalSlots,
+                                  winnerCallback: (winner) {
+                                    _showCelebrationDialog("Slot $winner");
+                                  },
+                                  raffleId: widget.raffleId,
+                                ),
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              width: MediaQuery.of(context).size.width * 0.9, // 90% of screen width
+                              height: MediaQuery.of(context).size.width * 0.9, // 90% of screen width (square)
+                              child: FortuneWheel(
+                                selected: _selectedStreamController.stream,
+                                animateFirst: false,
+                                duration: const Duration(seconds: 15),
+                                items: List.generate(
+                                  raffle.totalSlots,
+                                  (index) {
+                                    final double angle = (2 * pi) / raffle.totalSlots; // Angle per slice
+                                    return FortuneItem(
+                                      child: Transform.rotate(
+                                        angle: -angle * index, // Rotate text upright
+                                        child: Text(
+                                          '${index + 1}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
                                           ),
-                                          title: const Center(
-                                            child: Text(
-                                              "🎉 Coins Added! 🎉",
-                                              style: TextStyle(fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                          content: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                "Winning Slot: $winnerSlot",
-                                                style: const TextStyle(
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.orange,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 20),
-                                              Text(
-                                                "Congratulations! $prizeAmount coins have been added to your account.",
-                                                style: const TextStyle(fontSize: 16),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ],
-                                          ),
-                                          actions: [
-                                            Center(
-                                              child: ElevatedButton(
-                                                onPressed: () {
-                                                  Navigator.pop(context);
-                                                  _confettiController.stop();
-                                                  _resetRaffle();
-                                                },
-                                                child: const Text("OK"),
-                                              ),
-                                            ),
-                                          ],
                                         ),
-                                      );
-                                    }
-                                  } else {
-                                    debugPrint('No participant found for slot ${_winnerIndex! + 1}');
-                                  }
-                                }
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Error awarding prize: $e')),
-                                );
-                              }
-                            }
-                          },
-                        ),
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    const Text(
-                      "Buy a Slot",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                        "Note: You can only buy a maximum of 5 slots.",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-
-                    Expanded(
-                      child: GridView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 5,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: raffle.totalSlots,
-                        itemBuilder: (context, index) {
-                          final isAvailable = raffle.participants == null ||
-                              !raffle.participants!.any((participant) => participant['slot'] == index + 1);
-
-                          return GestureDetector(
-                            onTap: isAvailable
-                                ? () async {
-                                    EasyLoading.show(status: 'Booking slot...');
-                                    final userId = FirebaseAuth.instance.currentUser?.uid; // Get the current user's ID
-                                    if (userId == null) {
-                                      EasyLoading.dismiss();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('You must be logged in to book a slot.')),
-                                      );
-                                      return;
-                                    }
+                                      ),
+                                      style: FortuneItemStyle(
+                                        borderColor: Colors.white,
+                                        borderWidth: 1,
+                                        color: index % 2 == 0 ? Colors.blue[300]! : Colors.orange[300]!,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                onAnimationEnd: () async {
+                                  if (_winnerIndex != null) {
+                                    final winnerSlot = 'Slot ${_winnerIndex! + 1}'; // Winner slot number
+            
                                     try {
-                                      // Fetch the raffle document
+                                      // Fetch raffle document
                                       final raffleQuerySnapshot = await FirebaseFirestore.instance
                                           .collection('raffles')
                                           .where('raffleId', isEqualTo: widget.raffleId)
                                           .get();
-
-                                      if (raffleQuerySnapshot.docs.isEmpty) {
-                                        EasyLoading.dismiss();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Raffle not found.')),
+            
+                                      if (raffleQuerySnapshot.docs.isNotEmpty) {
+                                        final raffleDoc = raffleQuerySnapshot.docs.first;
+                                        final participants = List<Map<String, dynamic>>.from(
+                                          raffleDoc['participants'] ?? [],
                                         );
-                                        return;
-                                      }
-
-                                      final raffleDoc = raffleQuerySnapshot.docs.first.reference;
-                                      final raffleData = raffleQuerySnapshot.docs.first.data();
-                                      final participants =
-                                          List<Map<String, dynamic>>.from(raffleData['participants'] ?? []);
-
-                                      // Check how many slots the user already has in this raffle
-                                      final userSlots =
-                                          participants.where((participant) => participant['userId'] == userId).length;
-
-                                      if (userSlots >= 5) {
-                                        EasyLoading.dismiss();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                              content: Text('You can only book a maximum of 5 slots in this raffle.')),
+            
+                                        // Find winner
+                                        final Map<String, dynamic> winner = participants.firstWhere(
+                                          (participant) => participant['slot'] == _winnerIndex! + 1,
+                                          orElse: () => {},
                                         );
-                                        return;
-                                      }
-
-                                      // Fetch user document to check current raffleCoins
-                                      final userDoc =
-                                          await FirebaseFirestore.instance.collection('users').doc(userId).get();
-
-                                      if (!userDoc.exists) {
-                                        EasyLoading.dismiss();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('User data not found.')),
-                                        );
-                                        return;
-                                      }
-
-                                      final userCoins = userDoc.data()?['raffleCoins'] ?? 0;
-                                      final raffleSnapshot = await raffleDoc.get();
-                                      final betAmount = raffleSnapshot.data()?['betAmount'] ?? 0;
-
-
-                                      if (userCoins < betAmount) {
-                                        EasyLoading.dismiss();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Not enough raffleCoins to book this slot.')),
-                                        );
-                                        return;
-                                      }
-
-                                      // Perform transaction to book the slot
-                                      await FirebaseFirestore.instance.runTransaction((transaction) async {
-                                        final raffleSnapshot = await transaction.get(raffleDoc);
-                                        final availableSlots = raffleSnapshot['availableSlots'] as int;
-                                        final participants =
-                                            List<Map<String, dynamic>>.from(raffleSnapshot['participants'] ?? []);
-
-                                        // Check if slot is already booked
-                                        if (participants.any((p) => p['slot'] == index + 1)) {
-                                          throw Exception('Slot already booked.');
-                                        }
-
-                                        if (availableSlots > 0) {
-                                          participants.add({'slot': index + 1, 'userId': userId});
-
-                                          // Deduct raffleCoins from the user
-                                          transaction
-                                              .update(FirebaseFirestore.instance.collection('users').doc(userId), {
-                                            'raffleCoins': FieldValue.increment(-betAmount),
-                                          });
-
-                                          // Update the raffle slots
-                                          transaction.update(raffleDoc, {
-                                            'availableSlots': availableSlots - 1,
-                                            'participants': participants,
-                                          });
+            
+                                        if (winner.isNotEmpty) {
+                                          final winnerId = winner['userId'];
+            
+                                          // Fetch user data
+                                          final userDoc =
+                                              await FirebaseFirestore.instance.collection('users').doc(winnerId).get();
+            
+                                          if (userDoc.exists) {
+                                            final prizeAmount = raffleDoc['winningAmount'] ?? 0;
+            
+                                            // Update user coins
+                                            await FirebaseFirestore.instance.collection('users').doc(winnerId).update({
+                                              'raffleCoins': FieldValue.increment(prizeAmount),
+                                            });
+            
+                                            // Save to raffle_history
+                                            await FirebaseFirestore.instance.collection('raffle_history').add({
+                                              'slotNumber': _winnerIndex! + 1, // Save the winning slot number
+                                              'winnerId': winnerId, // Winner's user ID
+                                              'prizeAmount': prizeAmount, // Prize amount
+                                              'timestamp': FieldValue.serverTimestamp(), // Timestamp of the event
+                                            });
+            
+                                            // Show winner dialog
+                                            showDialog(
+                                              context: context,
+                                              barrierDismissible: false,
+                                              builder: (context) => AlertDialog(
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                title: const Center(
+                                                  child: Text(
+                                                    "🎉 Coins Added! 🎉",
+                                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                                  ),
+                                                ),
+                                                content: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      "Winning Slot: $winnerSlot",
+                                                      style: const TextStyle(
+                                                        fontSize: 20,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.orange,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 20),
+                                                    Text(
+                                                      "Congratulations! $prizeAmount coins have been added to your account.",
+                                                      style: const TextStyle(fontSize: 16),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  ],
+                                                ),
+                                                actions: [
+                                                  Center(
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        Navigator.pop(context);
+                                                        _confettiController.stop();
+                                                        _resetRaffle();
+                                                      },
+                                                      child: const Text("OK"),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }
                                         } else {
-                                          throw Exception('No slots available.');
+                                          debugPrint('No participant found for slot ${_winnerIndex! + 1}');
                                         }
-                                      });
-
-                                      EasyLoading.dismiss();
-                                      ScaffoldMessenger.of(context)
-                                        ..hideCurrentSnackBar() // Dismiss the current SnackBar if any
-                                        ..showSnackBar(
-                                          SnackBar(
-                                            content: Text('Slot ${index + 1} booked successfully!'),
-                                            duration: const Duration(seconds: 2), // Adjust duration as needed
-                                          ),
-                                        );
+                                      }
                                     } catch (e) {
-                                      EasyLoading.dismiss();
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Failed to book slot: $e')),
+                                        SnackBar(content: Text('Error awarding prize: $e')),
                                       );
                                     }
                                   }
-                                : null,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isAvailable ? Colors.grey[700] : Colors.green[400],
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Text(
-                                  (index + 1).toString().padLeft(2, '0'),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                },
                               ),
                             ),
-                          );
-                        },
+            
+                          const SizedBox(height: 16),
+            
+                          const Text(
+                            "Buy a Slot",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Text(
+                              "Note: You can only buy a maximum of 5 slots.",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+            
+                          Expanded(
+                            child: GridView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 5,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                              ),
+                              itemCount: raffle.totalSlots,
+                              itemBuilder: (context, index) {
+                                final isAvailable = raffle.participants == null ||
+                                    !raffle.participants!.any((participant) => participant['slot'] == index + 1);
+            
+                                return GestureDetector(
+                                  onTap: isAvailable
+                                      ? () async {
+                                          EasyLoading.show(status: 'Booking slot...');
+                                          final userId = FirebaseAuth.instance.currentUser?.uid; // Get the current user's ID
+                                          if (userId == null) {
+                                            EasyLoading.dismiss();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('You must be logged in to book a slot.')),
+                                            );
+                                            return;
+                                          }
+                                          try {
+                                            // Fetch the raffle document
+                                            final raffleQuerySnapshot = await FirebaseFirestore.instance
+                                                .collection('raffles')
+                                                .where('raffleId', isEqualTo: widget.raffleId)
+                                                .get();
+            
+                                            if (raffleQuerySnapshot.docs.isEmpty) {
+                                              EasyLoading.dismiss();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Raffle not found.')),
+                                              );
+                                              return;
+                                            }
+            
+                                            final raffleDoc = raffleQuerySnapshot.docs.first.reference;
+                                            final raffleData = raffleQuerySnapshot.docs.first.data();
+                                            final participants =
+                                                List<Map<String, dynamic>>.from(raffleData['participants'] ?? []);
+            
+                                            // Check how many slots the user already has in this raffle
+                                            final userSlots =
+                                                participants.where((participant) => participant['userId'] == userId).length;
+            
+                                            if (userSlots >= 5) {
+                                              EasyLoading.dismiss();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                    content: Text('You can only book a maximum of 5 slots in this raffle.')),
+                                              );
+                                              return;
+                                            }
+            
+                                            // Fetch user document to check current raffleCoins
+                                            final userDoc =
+                                                await FirebaseFirestore.instance.collection('users').doc(userId).get();
+            
+                                            if (!userDoc.exists) {
+                                              EasyLoading.dismiss();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('User data not found.')),
+                                              );
+                                              return;
+                                            }
+            
+                                            final userCoins = userDoc.data()?['raffleCoins'] ?? 0;
+                                            final raffleSnapshot = await raffleDoc.get();
+                                            final betAmount = raffleSnapshot.data()?['betAmount'] ?? 0;
+            
+            
+                                            if (userCoins < betAmount) {
+                                              EasyLoading.dismiss();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Not enough raffleCoins to book this slot.')),
+                                              );
+                                              return;
+                                            }
+            
+                                            // Perform transaction to book the slot
+                                            await FirebaseFirestore.instance.runTransaction((transaction) async {
+                                              final raffleSnapshot = await transaction.get(raffleDoc);
+                                              final availableSlots = raffleSnapshot['availableSlots'] as int;
+                                              final participants =
+                                                  List<Map<String, dynamic>>.from(raffleSnapshot['participants'] ?? []);
+            
+                                              // Check if slot is already booked
+                                              if (participants.any((p) => p['slot'] == index + 1)) {
+                                                throw Exception('Slot already booked.');
+                                              }
+            
+                                              if (availableSlots > 0) {
+                                                participants.add({'slot': index + 1, 'userId': userId});
+            
+                                                // Deduct raffleCoins from the user
+                                                transaction
+                                                    .update(FirebaseFirestore.instance.collection('users').doc(userId), {
+                                                  'raffleCoins': FieldValue.increment(-betAmount),
+                                                });
+            
+                                                // Update the raffle slots
+                                                transaction.update(raffleDoc, {
+                                                  'availableSlots': availableSlots - 1,
+                                                  'participants': participants,
+                                                });
+                                              } else {
+                                                throw Exception('No slots available.');
+                                              }
+                                            });
+            
+                                            EasyLoading.dismiss();
+                                            ScaffoldMessenger.of(context)
+                                              ..hideCurrentSnackBar() // Dismiss the current SnackBar if any
+                                              ..showSnackBar(
+                                                SnackBar(
+                                                  content: Text('Slot ${index + 1} booked successfully!'),
+                                                  duration: const Duration(seconds: 2), // Adjust duration as needed
+                                                ),
+                                              );
+                                          } catch (e) {
+                                            EasyLoading.dismiss();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Failed to book slot: $e')),
+                                            );
+                                          }
+                                        }
+                                      : null,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: isAvailable ? Colors.grey[700] : Colors.green[400],
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        (index + 1).toString().padLeft(2, '0'),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                    error: (message) => Center(
+                      child: Text(
+                        message,
+                        style: const TextStyle(color: Colors.red, fontSize: 16),
                       ),
                     ),
-                  ],
-                );
-              },
-              error: (message) => Center(
-                child: Text(
-                  message,
-                  style: const TextStyle(color: Colors.red, fontSize: 16),
-                ),
+                  );
+                },
               ),
-            );
-          },
-        ),
+            ),
+          ),
+        ],
       ),
     );
   }
