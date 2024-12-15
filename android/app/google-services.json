@@ -12,7 +12,20 @@
           "package_name": "com.example.raffle_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "143060704309-5a8fu7u87jnus28k2otj335t88bqrn0g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.raffle_app",
+            "certificate_hash": "0b64112e1944f3e7326cdbec13c6e22ce78467a2"
+          }
+        },
+        {
+          "client_id": "143060704309-db04nl55aeefa5n2kjlpdsd4efrd2rdo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBg1TujeAVrjdGnhhfBnTlbsWHxfkumQzA"
@@ -20,7 +33,55 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "143060704309-db04nl55aeefa5n2kjlpdsd4efrd2rdo.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "143060704309-tcc4fr2vhcmc83873h67use84s73dahh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.raffleApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:143060704309:android:c9fd6ffcd4f3fa894fe57c",
+        "android_client_info": {
+          "package_name": "com.raffle.game"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "143060704309-db04nl55aeefa5n2kjlpdsd4efrd2rdo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBg1TujeAVrjdGnhhfBnTlbsWHxfkumQzA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "143060704309-db04nl55aeefa5n2kjlpdsd4efrd2rdo.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "143060704309-tcc4fr2vhcmc83873h67use84s73dahh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.raffleApp"
+              }
+            }
+          ]
         }
       }
     }

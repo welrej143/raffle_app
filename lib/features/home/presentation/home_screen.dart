@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import 'package:raffle_app/core/services/service_locator.dart';
 import 'package:raffle_app/features/home/domain/entities/bet_option.dart';
@@ -20,8 +21,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:raffle_app/features/auth/presentation/login_screen.dart';
 
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    EasyLoading.dismiss();
+  }
 
   void _onMenuItemTap(BuildContext context, String menu) async {
     switch (menu) {
@@ -89,6 +101,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final User? currentUser = FirebaseAuth.instance.currentUser;
+    final numberFormat = NumberFormat('#,###');
 
     return BlocProvider(
       create: (_) => sl<HomeCubit>()..fetchBetOptions(),
@@ -262,6 +275,11 @@ class HomeScreen extends StatelessWidget {
                         final raffleData = snapshot.data!.docs.first.data();
                         final availableSlots = raffleData['availableSlots'] ?? 0;
                         final totalSlots = raffleData['totalSlots'] ?? 0;
+                        final betAmount = int.tryParse(raffleData['betAmount'].toString()) ?? 0;
+                        final winningAmount = int.tryParse(raffleData['winningAmount'].toString()) ?? 0;
+
+                        final formattedBetAmount = numberFormat.format(betAmount);
+                        final formattedWinningAmount = numberFormat.format(winningAmount);
 
                         return Container(
                           margin: const EdgeInsets.symmetric(
@@ -296,16 +314,16 @@ class HomeScreen extends StatelessWidget {
                                           ),
                                         ),
                                         const SizedBox(height: 8),
-                                        const Text(
-                                          'Bet 500 Coins to Win',
-                                          style: TextStyle(
+                                        Text(
+                                          'Bet $formattedBetAmount Coins to Win',
+                                          style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 14,
                                           ),
                                         ),
-                                        const Text(
-                                          '100,000 PHP',
-                                          style: TextStyle(
+                                        Text(
+                                          '$formattedWinningAmount PHP',
+                                          style: const TextStyle(
                                             color: Colors.yellow,
                                             fontSize: 22,
                                             fontWeight: FontWeight.bold,
@@ -480,6 +498,8 @@ class BetOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final numberFormat = NumberFormat('#,###');
+
     return StreamBuilder(
       stream: FirebaseFirestore.instance
           .collection('raffles')
@@ -502,8 +522,11 @@ class BetOptionCard extends StatelessWidget {
         final raffleData = snapshot.data!.docs.first.data();
         final availableSlots = raffleData['availableSlots'] ?? 0;
         final totalSlots = raffleData['totalSlots'] ?? 0;
+        final betAmount = int.tryParse(raffleData['betAmount'].toString()) ?? 0;
+        final winningAmount = int.tryParse(raffleData['winningAmount'].toString()) ?? 0;
 
-        final formattedText = _getFormattedTitle(option.title);
+        final formattedBetAmount = numberFormat.format(betAmount);
+        final formattedWinningAmount = numberFormat.format(winningAmount);
 
         return Container(
           padding: const EdgeInsets.all(12.0),
@@ -520,11 +543,33 @@ class BetOptionCard extends StatelessWidget {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min, // Adjust height based on content
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Display title and formatted content
-              ...formattedText,
-              // Available Slots (directly below the title)
+              // Text(
+              //   '${option.title}', // Original title from BetOption
+              //   style: const TextStyle(
+              //     color: Colors.white,
+              //     fontSize: 16,
+              //     fontWeight: FontWeight.bold,
+              //   ),
+              // ),
+              // const SizedBox(height: 8),
+              Text(
+                'Bet $formattedBetAmount Coins to Win',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                '$formattedWinningAmount PHP',
+                style: const TextStyle(
+                  color: Colors.yellow,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 'Total slots: $totalSlots',
                 style: const TextStyle(
@@ -541,8 +586,7 @@ class BetOptionCard extends StatelessWidget {
                   fontStyle: FontStyle.italic,
                 ),
               ),
-              // Join Now Button
-              const SizedBox(height: 10,),
+              const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -572,56 +616,8 @@ class BetOptionCard extends StatelessWidget {
       },
     );
   }
-
-  List<Widget> _getFormattedTitle(String title) {
-    final regex = RegExp(r'\d{1,3}(,\d{3})*\s?(PHP)');
-    final match = regex.firstMatch(title);
-
-    if (match != null) {
-      final boldText = match.group(0) ?? '';
-      final parts = title.split(boldText);
-
-      return [
-        Text(
-          parts[0],
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-          ),
-        ),
-        Text(
-          boldText,
-          style: const TextStyle(
-            color: Colors.yellow,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        if (parts.length > 1)
-          Text(
-            parts[1],
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.normal,
-            ),
-          ),
-      ];
-    }
-
-    return [
-      Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.normal,
-        ),
-      ),
-    ];
-  }
 }
+
 
 
 

@@ -1,4 +1,4 @@
-package com.example.raffle_app
+package com.raffle.game
 
 import io.flutter.embedding.android.FlutterActivity
 

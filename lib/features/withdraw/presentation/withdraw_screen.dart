@@ -14,6 +14,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _accountController = TextEditingController();
+  final _bankNameController = TextEditingController();
+  final _nameOnCardController = TextEditingController();
+
   String? _selectedMethod;
   int availableCoins = 0;
   final User? currentUser = FirebaseAuth.instance.currentUser;
@@ -46,6 +49,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
     final int amount = int.parse(_amountController.text.trim());
     final String account = _accountController.text.trim();
+    final String? bankName =
+    _selectedMethod == 'Bank Transfer' ? _bankNameController.text.trim() : null;
+    final String? nameOnCard =
+    _selectedMethod == 'Bank Transfer' ? _nameOnCardController.text.trim() : null;
 
     if (amount < 500) {
       EasyLoading.showError('Minimum withdrawal amount is 500 coins.');
@@ -57,9 +64,22 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return;
     }
 
-    EasyLoading.show(status: 'Submitting withdrawal...');
+    EasyLoading.show(status: 'Submitting withdrawal request...');
 
     try {
+      // Save withdrawal request to Firestore
+      await FirebaseFirestore.instance.collection('transactions').add({
+        'userId': currentUser?.uid,
+        'type': 'Withdrawal',
+        'amount': amount,
+        'method': _selectedMethod,
+        'account': account,
+        'bankName': bankName,
+        'nameOnCard': nameOnCard,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'Pending', // Mark for manual processing
+      });
+
       // Deduct coins from user's account
       await FirebaseFirestore.instance
           .collection('users')
@@ -68,21 +88,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         'raffleCoins': FieldValue.increment(-amount),
       });
 
-      // Save withdrawal transaction
-      await FirebaseFirestore.instance.collection('transactions').add({
-        'userId': currentUser?.uid,
-        'type': 'Withdrawal',
-        'amount': amount,
-        'method': _selectedMethod,
-        'account': account,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'Pending', // For admin review
-      });
-
       EasyLoading.showSuccess('Withdrawal request submitted!');
       Navigator.pop(context);
     } catch (e) {
-      EasyLoading.showError('Failed to submit withdrawal.');
+      EasyLoading.showError('Failed to submit withdrawal request.');
     }
   }
 
@@ -98,11 +107,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       backgroundColor: Colors.black,
-      body: availableCoins == null
+      body: availableCoins == 0
           ? const Center(
         child: CircularProgressIndicator(color: Colors.white),
       )
-          : Padding(
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
@@ -125,8 +134,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-
-              // Inform user of coin conversion and minimum withdrawal
               const Text(
                 'Note: 1 coin = 1 PHP \nMinimum withdrawal is 500 coins.',
                 style: TextStyle(
@@ -136,8 +143,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Withdrawal Method Dropdown
               const Text(
                 'Withdrawal Method',
                 style: TextStyle(color: Colors.white),
@@ -176,10 +181,49 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Account Number Field
+              if (_selectedMethod == 'Bank Transfer') ...[
+                const Text(
+                  'Bank Name',
+                  style: TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _bankNameController,
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Please enter the bank name'
+                      : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey[800],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Name on Card',
+                  style: TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _nameOnCardController,
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Please enter the name on the card'
+                      : null,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey[800],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 20),
+              ],
               const Text(
                 'Account Number',
                 style: TextStyle(color: Colors.white),
@@ -200,10 +244,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 ),
                 style: const TextStyle(color: Colors.white),
               ),
-
               const SizedBox(height: 20),
-
-              // Amount Field
               const Text(
                 'Amount to Withdraw',
                 style: TextStyle(color: Colors.white),
@@ -234,10 +275,16 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 ),
                 style: const TextStyle(color: Colors.white),
               ),
-
+              const SizedBox(height: 20),
+              const Text(
+                'It will take 2-3 business days to complete withdrawal requests. Thank you for your patience!',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
               const SizedBox(height: 30),
-
-              // Submit Button
               Center(
                 child: ElevatedButton(
                   onPressed: _submitWithdrawal,

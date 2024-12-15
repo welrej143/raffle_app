@@ -142,23 +142,30 @@ class _PlayingScreenState extends State<PlayingScreen> {
   Future<void> _resetRaffle() async {
     try {
       // Fetch the raffle document based on the provided raffleId
-      final raffleQuerySnapshot =
-          await FirebaseFirestore.instance.collection('raffles').where('raffleId', isEqualTo: widget.raffleId).get();
+      final raffleQuerySnapshot = await FirebaseFirestore.instance
+          .collection('raffles')
+          .where('raffleId', isEqualTo: widget.raffleId)
+          .get();
 
       if (raffleQuerySnapshot.docs.isNotEmpty) {
         // Get the first matching raffle document
-        final raffleDoc = raffleQuerySnapshot.docs.first.reference;
+        final raffleDoc = raffleQuerySnapshot.docs.first;
+        final raffleRef = raffleDoc.reference;
 
-        // Determine the number of slots based on the raffle ID
-        final resetSlots = widget.raffleId == 'mega_jackpot' ? 300 : 30;
+        // Fetch the totalSlots dynamically from the document
+        final totalSlots = raffleDoc['totalSlots'] ?? 0;
 
-        // Update the raffle document to reset slots and clear participants
-        await raffleDoc.update({
-          'availableSlots': resetSlots, // Reset based on raffle type
-          'participants': [], // Clear all participants
-        });
+        if (totalSlots > 0) {
+          // Update the raffle document to reset slots and clear participants
+          await raffleRef.update({
+            'availableSlots': totalSlots, // Reset to totalSlots
+            'participants': [], // Clear all participants
+          });
 
-        debugPrint("Raffle reset successfully.");
+          debugPrint("Raffle reset successfully with $totalSlots slots.");
+        } else {
+          debugPrint("Error: totalSlots is missing or invalid.");
+        }
       } else {
         debugPrint("No raffle found with the given raffleId.");
       }
@@ -219,7 +226,84 @@ class _PlayingScreenState extends State<PlayingScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+
+                    // Display slots bought by the user
+                    FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('raffles')
+                          .where('raffleId', isEqualTo: widget.raffleId) // Filter by raffleId
+                          .get(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const CircularProgressIndicator(color: Colors.white);
+                        }
+
+                        if (snapshot.hasError) {
+                          return const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text(
+                              "Error fetching your slots.",
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 16,
+                              ),
+                            ),
+                          );
+                        }
+
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text(
+                              "No raffle found.",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orangeAccent,
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Extract the raffle document
+                        final raffleDoc = snapshot.data!.docs.first;
+                        final participants = List<Map<String, dynamic>>.from(raffleDoc['participants'] ?? []);
+
+                        // Find the user's slots
+                        final userId = FirebaseAuth.instance.currentUser?.uid;
+                        final userSlots = participants
+                            .where((participant) => participant['userId'] == userId)
+                            .map((participant) => participant['slot'])
+                            .toList()
+                            .cast<int>();
+
+                        if (userSlots.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text(
+                              "You have not purchased any slots yet.",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orangeAccent,
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Your Slots: ${userSlots.join(', ')}",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.greenAccent,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
 
                     // Spinning Wheel or Countdown Animation
                     if (_isCountdownActive)
@@ -242,6 +326,7 @@ class _PlayingScreenState extends State<PlayingScreen> {
                             winnerCallback: (winner) {
                               _showCelebrationDialog("Slot $winner");
                             },
+                            raffleId: widget.raffleId,
                           ),
                         ),
                       )
@@ -308,15 +393,7 @@ class _PlayingScreenState extends State<PlayingScreen> {
                                         await FirebaseFirestore.instance.collection('users').doc(winnerId).get();
 
                                     if (userDoc.exists) {
-                                      final prizeAmount = widget.title.contains('Bet 20 Coins')
-                                          ? 500
-                                          : widget.title.contains('Bet 50 Coins')
-                                              ? 1000
-                                              : widget.title.contains('Bet 100 Coins')
-                                                  ? 2000
-                                                  : widget.title.contains('Bet 1000 Coins')
-                                                      ? 25000
-                                                      : 0;
+                                      final prizeAmount = raffleDoc['winningAmount'] ?? 0;
 
                                       // Update user coins
                                       await FirebaseFirestore.instance.collection('users').doc(winnerId).update({
@@ -486,15 +563,9 @@ class _PlayingScreenState extends State<PlayingScreen> {
                                       }
 
                                       final userCoins = userDoc.data()?['raffleCoins'] ?? 0;
-                                      final betAmount = raffle.title.contains('Bet 20 Coins')
-                                          ? 20
-                                          : raffle.title.contains('Bet 50 Coins')
-                                              ? 50
-                                              : raffle.title.contains('Bet 100 Coins')
-                                                  ? 100
-                                                  : raffle.title.contains('Bet 1000 Coins')
-                                                      ? 1000
-                                                      : 500; // Adjust based on your logic
+                                      final raffleSnapshot = await raffleDoc.get();
+                                      final betAmount = raffleSnapshot.data()?['betAmount'] ?? 0;
+
 
                                       if (userCoins < betAmount) {
                                         EasyLoading.dismiss();
@@ -536,9 +607,14 @@ class _PlayingScreenState extends State<PlayingScreen> {
                                       });
 
                                       EasyLoading.dismiss();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Slot ${index + 1} booked successfully!')),
-                                      );
+                                      ScaffoldMessenger.of(context)
+                                        ..hideCurrentSnackBar() // Dismiss the current SnackBar if any
+                                        ..showSnackBar(
+                                          SnackBar(
+                                            content: Text('Slot ${index + 1} booked successfully!'),
+                                            duration: const Duration(seconds: 2), // Adjust duration as needed
+                                          ),
+                                        );
                                     } catch (e) {
                                       EasyLoading.dismiss();
                                       ScaffoldMessenger.of(context).showSnackBar(
@@ -594,12 +670,14 @@ class AnimatedTambiolo extends StatefulWidget {
   final int totalSlots;
   final ValueChanged<int> winnerCallback;
   final bool isStartTambiolo;
+  final String raffleId;
 
   const AnimatedTambiolo({
     super.key,
     required this.totalSlots,
     required this.winnerCallback,
     required this.isStartTambiolo,
+    required this.raffleId,
   });
 
   @override
@@ -681,17 +759,21 @@ class _AnimatedTambioloState extends State<AnimatedTambiolo> with SingleTickerPr
       final winnerSlot = _currentNumber;
 
       try {
-        // Fetch raffle document
-        final raffleQuerySnapshot =
-            await FirebaseFirestore.instance.collection('raffles').where('raffleId', isEqualTo: 'mega_jackpot').get();
+        // Fetch the raffle document dynamically
+        final raffleQuerySnapshot = await FirebaseFirestore.instance
+            .collection('raffles')
+            .where('raffleId', isEqualTo: widget.raffleId)
+            .get();
 
         if (raffleQuerySnapshot.docs.isNotEmpty) {
           final raffleDoc = raffleQuerySnapshot.docs.first;
-          final participants = List<Map<String, dynamic>>.from(raffleDoc['participants'] ?? []);
+          final participants = List<Map<String, dynamic>>.from(
+            raffleDoc['participants'] ?? [],
+          );
 
           // Find the winner by slot
           final Map<String, dynamic>? winner = participants.firstWhere(
-            (participant) => participant['slot'] == winnerSlot,
+                (participant) => participant['slot'] == winnerSlot,
             orElse: () => {},
           );
 
@@ -699,14 +781,20 @@ class _AnimatedTambioloState extends State<AnimatedTambiolo> with SingleTickerPr
             final winnerId = winner['userId'];
 
             // Fetch winner's user document
-            final userDoc = await FirebaseFirestore.instance.collection('users').doc(winnerId).get();
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(winnerId)
+                .get();
 
             if (userDoc.exists) {
-              // Define prize amount for Mega Jackpot
-              const prizeAmount = 100000;
+              // Fetch the prize amount dynamically
+              final prizeAmount = raffleDoc['winningAmount'] ?? 0;
 
               // Add prize amount to winner's raffleCoins
-              await FirebaseFirestore.instance.collection('users').doc(winnerId).update({
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(winnerId)
+                  .update({
                 'raffleCoins': FieldValue.increment(prizeAmount),
               });
 
@@ -728,7 +816,7 @@ class _AnimatedTambioloState extends State<AnimatedTambiolo> with SingleTickerPr
                   ),
                   title: const Center(
                     child: Text(
-                      "🎉 Mega Jackpot Winner! 🎉",
+                      "🎉 We Have a Winner! 🎉",
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -744,9 +832,9 @@ class _AnimatedTambioloState extends State<AnimatedTambiolo> with SingleTickerPr
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
-                        "Congratulations! 100,000 coins have been added to your account.",
-                        style: TextStyle(fontSize: 16),
+                      Text(
+                        "Congratulations! $prizeAmount coins have been added to your account.",
+                        style: const TextStyle(fontSize: 16),
                         textAlign: TextAlign.center,
                       ),
                     ],

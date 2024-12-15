@@ -1,9 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.raffle_app">
-   <application
-        android:label="raffle_app"
+    package="com.raffle.game">
+
+    <uses-permission android:name="com.android.vending.BILLING" />
+
+    <application
+        android:label="Raffle Game"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/launcher_icon">
         <activity
             android:name=".MainActivity"
             android:exported="true"

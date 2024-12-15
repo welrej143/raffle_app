@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({Key? key}) : super(key: key);
@@ -13,11 +16,33 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> {
   final User? currentUser = FirebaseAuth.instance.currentUser;
   int currentCoins = 0;
+  final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+  final String _productId500 = 'coin_pack_500'; // Product ID for 500 coins
+  final String _productId1000 = 'coin_pack_1000'; // Product ID for 1000 coins
+  final String _productId2000 = 'coin_pack_2000'; // Product ID for 2000 coins
+  late StreamSubscription<List<PurchaseDetails>> _subscription;
 
   @override
   void initState() {
     super.initState();
     _fetchWalletData();
+
+    // Subscribe to the purchase updates stream
+    _subscription = _inAppPurchase.purchaseStream.listen(
+      _handlePurchaseUpdate,
+      onDone: () {
+        _subscription.cancel();
+      },
+      onError: (error) {
+        EasyLoading.showError('An error occurred: $error');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel(); // Cancel the subscription to avoid memory leaks
+    super.dispose();
   }
 
   Future<void> _fetchWalletData() async {
@@ -37,37 +62,78 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  Future<void> _depositCoins(int amount) async {
-    if (amount < 500) {
-      EasyLoading.showError('Minimum deposit amount is 500 coins.');
-      return;
+  Future<void> _buyCoins(String productId) async {
+    EasyLoading.show(status: 'Processing...');
+    try {
+      final bool available = await _inAppPurchase.isAvailable();
+      if (!available) {
+        EasyLoading.showError('In-app purchases are not available.');
+        return;
+      }
+
+      final ProductDetailsResponse response =
+      await _inAppPurchase.queryProductDetails({productId});
+      if (response.notFoundIDs.isNotEmpty) {
+        EasyLoading.showError('Product not found.');
+        return;
+      }
+
+      final ProductDetails productDetails = response.productDetails.first;
+      final PurchaseParam purchaseParam = PurchaseParam(productDetails: productDetails);
+
+      // Start purchase flow
+      _inAppPurchase.buyConsumable(purchaseParam: purchaseParam, autoConsume: true);
+    } catch (e) {
+      EasyLoading.showError('Failed to initiate purchase.');
+    }
+  }
+
+  void _handlePurchaseUpdate(List<PurchaseDetails> purchaseDetailsList) {
+    for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
+      if (purchaseDetails.status == PurchaseStatus.purchased) {
+        _onPurchaseSuccess(purchaseDetails.productID);
+      } else if (purchaseDetails.status == PurchaseStatus.error) {
+        EasyLoading.showError('Purchase failed: ${purchaseDetails.error?.message}');
+      }
+    }
+  }
+
+  Future<void> _onPurchaseSuccess(String productId) async {
+    int coinsToAdd = 0;
+    if (productId == _productId500) {
+      coinsToAdd = 500;
+    } else if (productId == _productId1000) {
+      coinsToAdd = 1000;
+    } else if (productId == _productId2000) {
+      coinsToAdd = 2000;
     }
 
-    EasyLoading.show(status: 'Processing deposit...');
-    try {
-      // Update user's coin balance
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser?.uid)
-          .update({
-        'raffleCoins': FieldValue.increment(amount),
-      });
+    if (coinsToAdd > 0) {
+      try {
+        // Update user's coin balance in Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser?.uid)
+            .update({
+          'raffleCoins': FieldValue.increment(coinsToAdd),
+        });
 
-      // Save transaction to Firestore
-      await FirebaseFirestore.instance.collection('transactions').add({
-        'userId': currentUser?.uid,
-        'type': 'Deposit',
-        'amount': amount,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+        // Save transaction to Firestore
+        await FirebaseFirestore.instance.collection('transactions').add({
+          'userId': currentUser?.uid,
+          'type': 'Deposit',
+          'amount': coinsToAdd,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
 
-      setState(() {
-        currentCoins += amount;
-      });
+        setState(() {
+          currentCoins += coinsToAdd;
+        });
 
-      EasyLoading.showSuccess('Successfully deposited $amount coins!');
-    } catch (e) {
-      EasyLoading.showError('Failed to deposit coins.');
+        EasyLoading.showSuccess('Successfully added $coinsToAdd coins!');
+      } catch (e) {
+        EasyLoading.showError('Failed to update balance.');
+      }
     }
   }
 
@@ -172,11 +238,11 @@ class _WalletScreenState extends State<WalletScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildDepositButton(amount: 500),
+              _buildDepositButton(productId: _productId500, label: '500'),
               const SizedBox(width: 10),
-              _buildDepositButton(amount: 1000),
+              _buildDepositButton(productId: _productId1000, label: '1000'),
               const SizedBox(width: 10),
-              _buildDepositButton(amount: 2000),
+              _buildDepositButton(productId: _productId2000, label: '2000'),
             ],
           ),
         ],
@@ -184,10 +250,10 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildDepositButton({required int amount}) {
+  Widget _buildDepositButton({required String productId, required String label}) {
     return ElevatedButton(
       onPressed: () {
-        _depositCoins(amount);
+        _buyCoins(productId);
       },
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.green,
@@ -197,7 +263,7 @@ class _WalletScreenState extends State<WalletScreen> {
         ),
       ),
       child: Text(
-        'Deposit $amount',
+        'Deposit $label',
         style: const TextStyle(
           color: Colors.white,
           fontSize: 14,
